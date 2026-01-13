@@ -34,9 +34,6 @@ export default function DocumentModal({
   const contentRef = useRef<HTMLDivElement>(null);
   const matchRefs = useRef<Map<number, HTMLElement>>(new Map());
 
-  console.log('📄 DocumentModal data:', { docId, document, documentText: documentText?.substring(0, 100) });
-
-  // Common words to exclude from highlighting
   const commonWords = new Set([
     'the', 'and', 'or', 'to', 'from', 'in', 'on', 'at', 'by', 'for', 'with',
     'about', 'as', 'into', 'through', 'during', 'before', 'after', 'above',
@@ -51,45 +48,37 @@ export default function DocumentModal({
       setError(null);
 
       try {
-        console.log('=== DocumentModal loading ===');
-        console.log('docId:', docId);
-
-        // For US Code view, fetchDocument gives metadata; fetchDocumentText gives section_text
         const [doc, textData, nodeDetails] = await Promise.all([
           fetchDocument(docId),
           fetchDocumentText(docId),
           fetchNodeDetails(docId)
         ]);
 
-        console.log('Fetched doc:', doc);
-        console.log('Fetched textData:', textData);
-        console.log('Fetched nodeDetails:', nodeDetails);
-
         setDocument({
-  ...doc,  // ← Changed from {doc, to ...doc,
-  title: nodeDetails?.title,
-  full_name: nodeDetails?.full_name,
-  text: nodeDetails?.text,
-  part: nodeDetails?.part,
-  chapter: nodeDetails?.chapter,
-  subchapter: nodeDetails?.subchapter,
-  section: nodeDetails?.section
-});
+          ...doc,
+          display_label: nodeDetails?.display_label,
+          title: nodeDetails?.title,
+          subtitle: nodeDetails?.subtitle,
+          chapter: nodeDetails?.chapter,
+          subchapter: nodeDetails?.subchapter,
+          part: nodeDetails?.part,
+          subpart: nodeDetails?.subpart,
+          section: nodeDetails?.section,
+          full_name: nodeDetails?.full_name,
+          text: nodeDetails?.text,
+        });
         setDocumentText(textData.text);
-
-      console.log('Final documentText length:', textData.text?.length);
-  } catch (err) {
-    console.error('Error loading document:', err);
-    setError(err instanceof Error ? err.message : 'Failed to load section text');
-  } finally {
-    setLoading(false);
+      } catch (err) {
+        console.error('Error loading document:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load section text');
+      } finally {
+        setLoading(false);
       }
     };
 
     loadDocument();
   }, [docId]);
 
-  // Calculate match positions when text loads
   useEffect(() => {
     if (!documentText) return;
 
@@ -100,7 +89,6 @@ export default function DocumentModal({
     const primaryPatterns: string[] = [];
     const secondaryPatterns: string[] = [];
 
-    // NEW: Parse search keywords
     if (searchKeywords) {
       searchKeywords.split(',').forEach((keyword) => {
         const trimmed = keyword.trim();
@@ -128,7 +116,6 @@ export default function DocumentModal({
       });
     }
 
-    // Find search keyword matches (green)
     if (searchPatterns.length > 0) {
       const regex = new RegExp(`(${searchPatterns.join('|')})`, 'gi');
       let match;
@@ -142,7 +129,6 @@ export default function DocumentModal({
       }
     }
 
-    // Find primary matches (yellow)
     if (primaryPatterns.length > 0) {
       const regex = new RegExp(`(${primaryPatterns.join('|')})`, 'gi');
       let match;
@@ -156,7 +142,6 @@ export default function DocumentModal({
       }
     }
 
-    // Find secondary matches (orange)
     if (secondaryPatterns.length > 0) {
       const regex = new RegExp(`(${secondaryPatterns.join('|')})`, 'gi');
       let match;
@@ -172,7 +157,7 @@ export default function DocumentModal({
 
     positions.sort((a, b) => a.index - b.index);
     setMatchPositions(positions);
-  }, [documentText, highlightTerm, secondaryHighlightTerm, searchKeywords]);
+  }, [documentText, highlightTerm, secondaryHighlightTerm, searchKeywords, commonWords]);
 
   const scrollToMatch = (index: number) => {
     const element = matchRefs.current.get(index);
@@ -187,11 +172,6 @@ export default function DocumentModal({
     secondaryTerm: string | null,
     searchTerms: string | null,
   ): JSX.Element[] => {
-    console.log('🎨 DocumentModal highlightText called with:', {
-    searchTerms,
-    term,
-    secondaryTerm
-  }); 
     if (!term && !secondaryTerm && !searchTerms) {
       return [<span key="0">{text}</span>];
     }
@@ -202,7 +182,6 @@ export default function DocumentModal({
       const primaryWords = new Set<string>();
       const secondaryWords = new Set<string>();
 
-      // Parse search keywords (green - highest priority)
       if (searchTerms) {
         searchTerms.split(',').forEach((keyword) => {
           const trimmed = keyword.trim();
@@ -213,7 +192,6 @@ export default function DocumentModal({
         });
       }
 
-      // Parse primary term (yellow)
       if (term) {
         patterns.push(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
         term.split(/\s+/).forEach((word) => {
@@ -224,7 +202,6 @@ export default function DocumentModal({
         });
       }
 
-      // Parse secondary term (orange)
       if (secondaryTerm) {
         patterns.push(secondaryTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
         secondaryTerm.split(/\s+/).forEach((word) => {
@@ -245,9 +222,6 @@ export default function DocumentModal({
         const partStart = currentIndex;
         currentIndex += part.length;
 
-        // Priority: search keywords (green) > primary term (yellow) > secondary term (orange)
-        
-        // Check if it's a search keyword match
         let isSearchMatch = false;
         for (const searchWord of searchWords) {
           if (partLower.includes(searchWord) || searchWord.includes(partLower)) {
@@ -270,7 +244,6 @@ export default function DocumentModal({
           );
         }
 
-        // Check primary term (yellow)
         if (term && (partLower === term.toLowerCase() || primaryWords.has(partLower))) {
           return (
             <mark
@@ -285,7 +258,6 @@ export default function DocumentModal({
           );
         }
 
-        // Check secondary term (orange)
         if (
           secondaryTerm &&
           (partLower === secondaryTerm.toLowerCase() || secondaryWords.has(partLower))
@@ -319,162 +291,130 @@ export default function DocumentModal({
         className="bg-gray-800 rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col relative border border-gray-700"
         onClick={(e) => e.stopPropagation()}
       >
-       {/* Header */}
-<div className="p-6 border-b border-gray-700 flex justify-between items-start">
-  <div className="flex-1">
-    {/* Main heading - use display name */}
-    <h2 className="text-2xl font-semibold text-blue-400 mb-3">
-      {document?.name || document?.doc_id || docId}
-    </h2>
-    
-    {/* ✅ NEW: Show hierarchy for index nodes */}
-    {document?.hierarchy && Object.keys(document.hierarchy).length > 0 && (
-      <div className="space-y-1 text-sm text-gray-300 mb-3 font-mono">
-        {document.hierarchy.title && (
-          <div>
-            <span className="text-gray-500">Title:</span> {document.hierarchy.title}
+        <div className="p-6 border-b border-gray-700 flex justify-between items-start">
+          <div className="flex-1">
+            <h2 className="text-2xl font-semibold text-blue-400 mb-3">
+              {document?.display_label || document?.name || document?.doc_id || docId}
+            </h2>
+            
+            {document && (document.title || document.subtitle || document.chapter || document.section) && (
+              <div className="space-y-1 text-sm text-gray-300 mb-3 font-mono">
+                {document.title && (
+                  <div>
+                    <span className="text-gray-500">Title:</span> {document.title}
+                  </div>
+                )}
+                {document.subtitle && (
+                  <div>
+                    <span className="text-gray-500">Subtitle:</span> {document.subtitle}
+                  </div>
+                )}
+                {document.chapter && (
+                  <div>
+                    <span className="text-gray-500">Chapter:</span> {document.chapter}
+                  </div>
+                )}
+                {document.subchapter && (
+                  <div>
+                    <span className="text-gray-500">Subchapter:</span> {document.subchapter}
+                  </div>
+                )}
+                {document.part && (
+                  <div>
+                    <span className="text-gray-500">Part:</span> {document.part}
+                  </div>
+                )}
+                {document.subpart && (
+                  <div>
+                    <span className="text-gray-500">Subpart:</span> {document.subpart}
+                  </div>
+                )}
+                {document.section && (
+                  <div>
+                    <span className="text-gray-500">Section:</span> {document.section}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {document && document.full_name && (
+              <h3 className="text-lg font-medium text-gray-400 mb-1">
+                {document.full_name}
+              </h3>
+            )}
+            
+            {document && (
+              <div className="space-y-1 text-sm">
+                {document.one_sentence_summary && (
+                  <p className="text-gray-300">{document.one_sentence_summary}</p>
+                )}
+                <div className="flex gap-4 text-gray-500">
+                  {document.category && (
+                    <span className="px-2 py-1 bg-gray-700 rounded">
+                      {document.category}
+                    </span>
+                  )}
+                  {!document.category && document.doc_id.startsWith('index:') && (
+                    <span className="px-2 py-1 bg-gray-700 rounded">
+                      index
+                    </span>
+                  )}
+                  {document.date_range_earliest && (
+                    <span>
+                      {document.date_range_earliest}
+                      {document.date_range_latest &&
+                      document.date_range_latest !== document.date_range_earliest
+                        ? ` to ${document.date_range_latest}`
+                        : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        {document.hierarchy.part && (
-          <div>
-            <span className="text-gray-500">Part:</span> {document.hierarchy.part}
-          </div>
-        )}
-        {document.hierarchy.chapter && (
-          <div>
-            <span className="text-gray-500">Chapter:</span> {document.hierarchy.chapter}
-          </div>
-        )}
-        {document.hierarchy.part2 && (
-          <div>
-            <span className="text-gray-500">Part:</span> {document.hierarchy.part2}
-          </div>
-        )}
-        {document.hierarchy.subpart && (
-          <div>
-            <span className="text-gray-500">Subpart:</span> {document.hierarchy.subpart}
-          </div>
-        )}
-        {document.hierarchy.subchapter && (
-          <div>
-            <span className="text-gray-500">Subchapter:</span> {document.hierarchy.subchapter}
-          </div>
-        )}
-        {document.hierarchy.section && (
-          <div>
-            <span className="text-gray-500">Section:</span> {document.hierarchy.section}
-          </div>
-        )}
-        {document.hierarchy.subsection && (
-          <div>
-            <span className="text-gray-500">Subsection:</span> {document.hierarchy.subsection}
-          </div>
-        )}
-        {document.hierarchy.paragraph && (
-          <div>
-            <span className="text-gray-500">Paragraph:</span> {document.hierarchy.paragraph}
-          </div>
-        )}
-        {document.hierarchy.subparagraph && (
-          <div>
-            <span className="text-gray-500">Subparagraph:</span> {document.hierarchy.subparagraph}
-          </div>
-        )}
-        {document.hierarchy.clause && (
-          <div>
-            <span className="text-gray-500">Clause:</span> {document.hierarchy.clause}
-          </div>
-        )}
-        {document.hierarchy.subclause && (
-          <div>
-            <span className="text-gray-500">Subclause:</span> {document.hierarchy.subclause}
-          </div>
-        )}
-        {/* ✅ Show heading at the bottom if it exists and is not empty */}
-        {document.index_heading && document.index_heading.trim() !== '' && (
-          <div>
-            <span className="text-gray-500">Heading:</span> {document.index_heading}
-          </div>
-        )}
-      </div>
-    )}
-    
-    {/* Full name if available (for non-index nodes) */}
-    {document && document.full_name && !document.hierarchy && (
-      <h3 className="text-lg font-medium text-gray-400 mb-1">
-        {document.full_name}
-      </h3>
-    )}
-    
-    {document && (
-      <div className="space-y-1 text-sm">
-        {document.one_sentence_summary && (
-          <p className="text-gray-300">{document.one_sentence_summary}</p>
-        )}
-        <div className="flex gap-4 text-gray-500">
-          <span className="px-2 py-1 bg-gray-700 rounded">
-            {document.category}
-          </span>
-          {document.date_range_earliest && (
-            <span>
-              {document.date_range_earliest}
-              {document.date_range_latest &&
-              document.date_range_latest !== document.date_range_earliest
-                ? ` to ${document.date_range_latest}`
-                : ''}
-            </span>
+          <button
+            onClick={onClose}
+            className="ml-4 text-gray-400 hover:text-white text-2xl leading-none transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 pr-12" ref={contentRef}>
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-gray-400">Loading section text...</div>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-900/30 border border-red-700 rounded p-4 text-red-300">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && (!documentText || documentText.trim() === '') && (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-gray-400 text-center">
+                <p className="text-lg">Full text for this node is not available.</p>
+              </div>
+            </div>
+          )}
+
+          {!loading && !error && documentText && documentText.trim() !== '' && (
+            <div className="prose prose-invert max-w-none">
+              <div className="whitespace-pre-wrap text-gray-300 leading-relaxed font-mono text-sm">
+                {highlightText(
+                  documentText,
+                  highlightTerm,
+                  secondaryHighlightTerm || null,
+                  searchKeywords || null,
+                )}
+              </div>
+            </div>
           )}
         </div>
-      </div>
-    )}
-  </div>
-  <button
-    onClick={onClose}
-    className="ml-4 text-gray-400 hover:text-white text-2xl leading-none transition-colors"
-  >
-    ✕
-  </button>
-</div>
 
-        {/* Content */}
-{/* Content */}
-<div className="flex-1 overflow-y-auto p-6 pr-12" ref={contentRef}>
-  {loading && (
-    <div className="flex items-center justify-center py-12">
-      <div className="text-gray-400">Loading section text...</div>
-    </div>
-  )}
-
-  {error && (
-    <div className="bg-red-900/30 border border-red-700 rounded p-4 text-red-300">
-      {error}
-    </div>
-  )}
-
-  {/* ✅ NEW: Show message when no text is available */}
-  {!loading && !error && (!documentText || documentText.trim() === '') && (
-    <div className="flex items-center justify-center py-12">
-      <div className="text-gray-400 text-center">
-        <p className="text-lg">Full text for this node is not available.</p>
-      </div>
-    </div>
-  )}
-
-  {!loading && !error && documentText && documentText.trim() !== '' && (
-    <div className="prose prose-invert max-w-none">
-      <div className="whitespace-pre-wrap text-gray-300 leading-relaxed font-mono text-sm">
-        {highlightText(
-          documentText,
-          highlightTerm,
-          secondaryHighlightTerm || null,
-          searchKeywords || null,
-        )}
-      </div>
-    </div>
-  )}
-</div>
-
-        {/* Scroll indicator */}
         {!loading && !error && matchPositions.length > 0 && (
           <div className="absolute right-4 top-32 bottom-24 w-3 bg-gray-700/50 rounded-full pointer-events-none z-10">
             {matchPositions.map((match, idx) => (
@@ -495,7 +435,6 @@ export default function DocumentModal({
           </div>
         )}
 
-        {/* Footer */}
         <div className="p-4 border-t border-gray-700 flex justify-between items-center">
           <div className="text-sm text-gray-500 flex gap-4">
             {searchKeywords && (

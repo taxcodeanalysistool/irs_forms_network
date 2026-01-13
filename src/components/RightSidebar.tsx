@@ -21,7 +21,6 @@ export default function RightSidebar({
   relationships,
   totalRelationships,
   onClose,
-  yearRange,
   keywords,
   categoryFilter = 'all',
   onActorClick,
@@ -37,23 +36,20 @@ export default function RightSidebar({
 
   if (!selectedActor) return null;
 
-  // ✅ Helper function to get display metrics based on category filter
   const getDisplayMetrics = (node: GraphNode | null) => {
     if (!node) return null;
 
-    // For form and line nodes with category field - use their direct metrics
     if (node.category) {
       return {
         total_amount: node.total_amount,
         total_num_forms: node.total_num_forms,
         amount_per_form: node.amount_per_form,
         num_lines: node.num_lines,
-        amount: node.amount, // for lines
-        num_forms: node.num_forms, // for lines
+        amount: node.amount,
+        num_forms: node.num_forms,
       };
     }
 
-    // ✅ UPDATED: For index AND regulation nodes - use category-specific fields based on filter
     if (node.node_type === 'index' || node.node_type === 'regulation') {
       if (categoryFilter === 'individual') {
         return {
@@ -70,7 +66,6 @@ export default function RightSidebar({
           num_lines: node.corp_num_lines,
         };
       } else {
-        // 'all' - show combined totals
         const ind_amt = node.ind_total_amount || 0;
         const corp_amt = node.corp_total_amount || 0;
         const ind_forms = node.ind_total_num_forms || 0;
@@ -87,7 +82,6 @@ export default function RightSidebar({
       }
     }
 
-    // Fallback to direct metrics
     return {
       total_amount: node.total_amount,
       total_num_forms: node.total_num_forms,
@@ -96,7 +90,6 @@ export default function RightSidebar({
     };
   };
 
-  // Fetch details for selected actor
   useEffect(() => {
     const fetchSelectedActorDetails = async () => {
       if (!selectedActor) {
@@ -116,7 +109,6 @@ export default function RightSidebar({
     fetchSelectedActorDetails();
   }, [selectedActor]);
 
-  // Search for another node to filter by
   useEffect(() => {
     const performSearch = async () => {
       if (searchQuery.trim().length < 2) {
@@ -140,20 +132,17 @@ export default function RightSidebar({
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  // Filter relationships by a second node if chosen
   const filteredRelationships = filterActor
     ? relationships.filter(rel =>
         rel.actor === filterActor || rel.target === filterActor
       )
     : relationships;
 
-  // Sort relationships by edge type
   const sortedRelationships = [...filteredRelationships].sort((a, b) => {
     const order = { 'belongs_to': 1, 'cites_section': 2, 'cites_regulation': 3 };
     return (order[a.edge_type as keyof typeof order] || 99) - (order[b.edge_type as keyof typeof order] || 99);
   });
 
-  // Toggle expansion and fetch neighbor node details
   const toggleExpand = async (rel: Relationship) => {
     if (expandedRelId === rel.id) {
       setExpandedRelId(null);
@@ -248,7 +237,6 @@ export default function RightSidebar({
   return (
     <>
       <div className="w-96 bg-gray-800 border-l border-gray-700 flex flex-col h-full overflow-hidden">
-        {/* Header */}
         <div className="p-4 border-b border-gray-700">
           <div className="flex justify-between items-start mb-3">
             <div className="flex-1">
@@ -256,7 +244,6 @@ export default function RightSidebar({
                 <h2 className="text-lg font-semibold text-blue-400">Node relationships</h2>
               </div>
 
-              {/* Selected node info */}
               <div className="mt-2">
                 <p className="text-sm text-white font-medium">
                   {selectedActorDetails && getCategoryBadge(selectedActorDetails.category)}{' '}
@@ -274,89 +261,83 @@ export default function RightSidebar({
                 Showing {sortedRelationships.length} of {totalRelationships} relationships
               </p>
 
-              {/* Node-specific details and actions */}
-<div className="mt-3 space-y-2">
-  {/* Line node: neutral styling */}
-  {selectedActorDetails?.node_type === 'line' && selectedMetrics && (
-    <div className="p-3 bg-gray-700/50 border border-gray-600 rounded text-xs space-y-2">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold text-gray-300 uppercase tracking-wide">
-          Line Metrics
-        </div>
-        <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
-          selectedActorDetails.category === 'corporation' 
-            ? 'text-purple-400 bg-purple-900/30' 
-            : 'text-blue-400 bg-blue-900/30'
-        }`}>
-          {selectedActorDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
-        </div>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-gray-400">Amount:</span>
-        <span className="font-mono text-white font-medium">
-          {formatAmount(selectedMetrics.amount)}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-gray-400">Forms:</span>
-        <span className="font-mono text-white font-medium">
-          {formatNumForms(selectedMetrics.num_forms)}
-        </span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-gray-400">Amount per form:</span>
-        <span className="font-mono text-white font-medium">
-          {formatAmountPerForm(selectedActorDetails.amount_per_form)}
-        </span>
-      </div>
-    </div>
-  )}
+              <div className="mt-3 space-y-2">
+                {selectedActorDetails?.node_type === 'line' && selectedMetrics && (
+                  <div className="p-3 bg-gray-700/50 border border-gray-600 rounded text-xs space-y-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-semibold text-gray-300 uppercase tracking-wide">
+                        Line Metrics
+                      </div>
+                      <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                        selectedActorDetails.category === 'corporation' 
+                          ? 'text-purple-400 bg-purple-900/30' 
+                          : 'text-blue-400 bg-blue-900/30'
+                      }`}>
+                        {selectedActorDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Amount:</span>
+                      <span className="font-mono text-white font-medium">
+                        {formatAmount(selectedMetrics.amount)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Forms:</span>
+                      <span className="font-mono text-white font-medium">
+                        {formatNumForms(selectedMetrics.num_forms)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Amount per form:</span>
+                      <span className="font-mono text-white font-medium">
+                        {formatAmountPerForm(selectedActorDetails.amount_per_form)}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
+                {selectedActorDetails?.node_type === 'form' && selectedMetrics && (
+                  <div className="p-3 bg-gray-700/50 border border-gray-600 rounded text-xs space-y-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-semibold text-gray-300 uppercase tracking-wide">
+                        Form Aggregates
+                      </div>
+                      <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                        selectedActorDetails.category === 'corporation' 
+                          ? 'text-purple-400 bg-purple-900/30' 
+                          : 'text-blue-400 bg-blue-900/30'
+                      }`}>
+                        {selectedActorDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Total amount:</span>
+                      <span className="font-mono text-white font-medium">
+                        {formatAmount(selectedMetrics.total_amount)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Total forms:</span>
+                      <span className="font-mono text-white font-medium">
+                        {formatNumForms(selectedMetrics.total_num_forms)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Avg per form:</span>
+                      <span className="font-mono text-white font-medium">
+                        {formatAmountPerForm(selectedMetrics.amount_per_form)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Lines:</span>
+                      <span className="font-mono text-white font-medium">
+                        {selectedMetrics.num_lines?.toLocaleString() || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
-                {/* Form node: neutral styling */}
-{selectedActorDetails?.node_type === 'form' && selectedMetrics && (
-  <div className="p-3 bg-gray-700/50 border border-gray-600 rounded text-xs space-y-2">
-    <div className="flex items-center justify-between mb-2">
-      <div className="text-xs font-semibold text-gray-300 uppercase tracking-wide">
-        Form Aggregates
-      </div>
-      <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
-        selectedActorDetails.category === 'corporation' 
-          ? 'text-purple-400 bg-purple-900/30' 
-          : 'text-blue-400 bg-blue-900/30'
-      }`}>
-        {selectedActorDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
-      </div>
-    </div>
-    <div className="flex justify-between">
-      <span className="text-gray-400">Total amount:</span>
-      <span className="font-mono text-white font-medium">
-        {formatAmount(selectedMetrics.total_amount)}
-      </span>
-    </div>
-    <div className="flex justify-between">
-      <span className="text-gray-400">Total forms:</span>
-      <span className="font-mono text-white font-medium">
-        {formatNumForms(selectedMetrics.total_num_forms)}
-      </span>
-    </div>
-    <div className="flex justify-between">
-      <span className="text-gray-400">Avg per form:</span>
-      <span className="font-mono text-white font-medium">
-        {formatAmountPerForm(selectedMetrics.amount_per_form)}
-      </span>
-    </div>
-    <div className="flex justify-between">
-      <span className="text-gray-400">Lines:</span>
-      <span className="font-mono text-white font-medium">
-        {selectedMetrics.num_lines?.toLocaleString() || 'N/A'}
-      </span>
-    </div>
-  </div>
-)}
-
-
-                {/* Index/Section node: neutral styling with category badge */}
                 {selectedActorDetails?.node_type === 'index' && selectedMetrics && (
                   <div className="p-3 bg-gray-700/50 border border-gray-600 rounded text-xs space-y-2">
                     <div className="flex items-center justify-between mb-2">
@@ -400,7 +381,6 @@ export default function RightSidebar({
                   </div>
                 )}
 
-                {/* ✅ NEW: Regulation node: neutral styling with category badge */}
                 {selectedActorDetails?.node_type === 'regulation' && selectedMetrics && (
                   <div className="p-3 bg-gray-700/50 border border-gray-600 rounded text-xs space-y-2">
                     <div className="flex items-center justify-between mb-2">
@@ -444,7 +424,6 @@ export default function RightSidebar({
                   </div>
                 )}
 
-                {/* View text button for section/regulation/index */}
                 {selectedActorDetails && 
                  (selectedActorDetails.node_type === 'section' || 
                   selectedActorDetails.node_type === 'index' ||
@@ -457,7 +436,6 @@ export default function RightSidebar({
                   </button>
                 )}
 
-                {/* Show definition if available */}
                 {selectedActorDetails?.definition && (
                   <div className="p-2 bg-blue-900/20 border border-blue-700/30 rounded">
                     <div className="text-xs text-blue-400 font-semibold mb-1">Definition:</div>
@@ -474,7 +452,6 @@ export default function RightSidebar({
             </button>
           </div>
 
-          {/* Filter by another node */}
           <div className="relative mt-3">
             {filterActor ? (
               <div className="flex items-center justify-between bg-blue-900/30 border border-blue-700/50 rounded px-2 py-1">
@@ -541,7 +518,6 @@ export default function RightSidebar({
           </div>
         </div>
 
-        {/* Relationship list */}
         <div className="flex-1 overflow-y-auto">
           {sortedRelationships.length === 0 ? (
             <p className="text-gray-500 text-sm p-4">No relationships found</p>
@@ -558,7 +534,6 @@ export default function RightSidebar({
 
               return (
                 <div key={rel.id}>
-                  {/* Relationship header */}
                   <div
                     onClick={() => toggleExpand(rel)}
                     className={`p-4 cursor-pointer hover:bg-gray-700/30 transition-colors ${
@@ -594,7 +569,6 @@ export default function RightSidebar({
                     </div>
                   </div>
 
-                  {/* Expanded node metadata */}
                   {isExpanded && (
                     <div className="px-4 pb-4 bg-gray-700/10">
                       {neighborDetails === undefined && (
@@ -603,94 +577,89 @@ export default function RightSidebar({
                         </div>
                       )}
 
-                      {/* Form node */}
-{neighborDetails && neighborDetails.node_type === 'form' && neighborMetrics && (
-  <div className="space-y-2">
-    <div className="text-xs text-gray-400 mb-1">Form details</div>
-    <div className="font-semibold text-sm text-white">
-      {getCategoryBadge(neighborDetails.category)} {neighborDetails.name}
-    </div>
-    <div className={`text-xs font-semibold px-2 py-0.5 rounded inline-block ${
-      neighborDetails.category === 'corporation' 
-        ? 'text-purple-400 bg-purple-900/30' 
-        : 'text-blue-400 bg-blue-900/30'
-    }`}>
-      {neighborDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
-    </div>
-    {neighborDetails.full_name && (
-      <div className="text-xs text-gray-300">
-        {neighborDetails.full_name}
-      </div>
-    )}
-    <div className="mt-2 p-2 bg-gray-700/30 rounded space-y-1.5">
-      <div className="flex justify-between text-xs">
-        <span className="text-gray-400">Total amount:</span>
-        <span className="font-mono text-white font-medium">
-          {formatAmount(neighborMetrics.total_amount)}
-        </span>
-      </div>
-      <div className="flex justify-between text-xs">
-        <span className="text-gray-400">Total forms:</span>
-        <span className="font-mono text-white font-medium">
-          {formatNumForms(neighborMetrics.total_num_forms)}
-        </span>
-      </div>
-      <div className="flex justify-between text-xs">
-        <span className="text-gray-400">Avg per form:</span>
-        <span className="font-mono text-white font-medium">
-          {formatAmountPerForm(neighborMetrics.amount_per_form)}
-        </span>
-      </div>
-      <div className="flex justify-between text-xs">
-        <span className="text-gray-400">Lines:</span>
-        <span className="font-mono text-white font-medium">
-          {neighborMetrics.num_lines?.toLocaleString() || 'N/A'}
-        </span>
-      </div>
-    </div>
-  </div>
-)}
+                      {neighborDetails && neighborDetails.node_type === 'form' && neighborMetrics && (
+                        <div className="space-y-2">
+                          <div className="text-xs text-gray-400 mb-1">Form details</div>
+                          <div className="font-semibold text-sm text-white">
+                            {getCategoryBadge(neighborDetails.category)} {neighborDetails.name}
+                          </div>
+                          <div className={`text-xs font-semibold px-2 py-0.5 rounded inline-block ${
+                            neighborDetails.category === 'corporation' 
+                              ? 'text-purple-400 bg-purple-900/30' 
+                              : 'text-blue-400 bg-blue-900/30'
+                          }`}>
+                            {neighborDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
+                          </div>
+                          {neighborDetails.full_name && (
+                            <div className="text-xs text-gray-300">
+                              {neighborDetails.full_name}
+                            </div>
+                          )}
+                          <div className="mt-2 p-2 bg-gray-700/30 rounded space-y-1.5">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Total amount:</span>
+                              <span className="font-mono text-white font-medium">
+                                {formatAmount(neighborMetrics.total_amount)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Total forms:</span>
+                              <span className="font-mono text-white font-medium">
+                                {formatNumForms(neighborMetrics.total_num_forms)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Avg per form:</span>
+                              <span className="font-mono text-white font-medium">
+                                {formatAmountPerForm(neighborMetrics.amount_per_form)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Lines:</span>
+                              <span className="font-mono text-white font-medium">
+                                {neighborMetrics.num_lines?.toLocaleString() || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
+                      {neighborDetails && neighborDetails.node_type === 'line' && neighborMetrics && (
+                        <div className="space-y-2">
+                          <div className="text-xs text-gray-400 mb-1">Line details</div>
+                          <div className="font-semibold text-sm text-white">
+                            {getCategoryBadge(neighborDetails.category)} {neighborDetails.name}
+                          </div>
+                          <div className={`text-xs font-semibold px-2 py-0.5 rounded inline-block ${
+                            neighborDetails.category === 'corporation' 
+                              ? 'text-purple-400 bg-purple-900/30' 
+                              : 'text-blue-400 bg-blue-900/30'
+                          }`}>
+                            {neighborDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
+                          </div>
+                          <div className="mt-2 p-2 bg-gray-700/30 rounded space-y-1.5">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Amount:</span>
+                              <span className="font-mono text-white font-medium">
+                                {formatAmount(neighborMetrics.amount)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Forms:</span>
+                              <span className="font-mono text-white font-medium">
+                                {formatNumForms(neighborMetrics.num_forms)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Amount per form:</span>
+                              <span className="font-mono text-white font-medium">
+                                {formatAmountPerForm(neighborDetails.amount_per_form)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
-                      {/* Line node */}
-{neighborDetails && neighborDetails.node_type === 'line' && neighborMetrics && (
-  <div className="space-y-2">
-    <div className="text-xs text-gray-400 mb-1">Line details</div>
-    <div className="font-semibold text-sm text-white">
-      {getCategoryBadge(neighborDetails.category)} {neighborDetails.name}
-    </div>
-    <div className={`text-xs font-semibold px-2 py-0.5 rounded inline-block ${
-      neighborDetails.category === 'corporation' 
-        ? 'text-purple-400 bg-purple-900/30' 
-        : 'text-blue-400 bg-blue-900/30'
-    }`}>
-      {neighborDetails.category === 'corporation' ? 'Corporation' : 'Individual'}
-    </div>
-    <div className="mt-2 p-2 bg-gray-700/30 rounded space-y-1.5">
-      <div className="flex justify-between text-xs">
-        <span className="text-gray-400">Amount:</span>
-        <span className="font-mono text-white font-medium">
-          {formatAmount(neighborMetrics.amount)}
-        </span>
-      </div>
-      <div className="flex justify-between text-xs">
-        <span className="text-gray-400">Forms:</span>
-        <span className="font-mono text-white font-medium">
-          {formatNumForms(neighborMetrics.num_forms)}
-        </span>
-      </div>
-      <div className="flex justify-between text-xs">
-        <span className="text-gray-400">Amount per form:</span>
-        <span className="font-mono text-white font-medium">
-          {formatAmountPerForm(neighborDetails.amount_per_form)}
-        </span>
-      </div>
-    </div>
-  </div>
-)}
-
-
-                      {/* Section/Index node */}
                       {neighborDetails && (neighborDetails.node_type === 'section' || neighborDetails.node_type === 'index') && neighborMetrics && (
                         <div className="space-y-2">
                           <div className="text-xs text-gray-400 mb-1">USC Section</div>
@@ -751,7 +720,6 @@ export default function RightSidebar({
                         </div>
                       )}
 
-                      {/* Regulation node */}
                       {neighborDetails && neighborDetails.node_type === 'regulation' && (
                         <div className="space-y-2">
                           <div className="text-xs text-gray-400 mb-1">Treasury Regulation</div>
@@ -814,7 +782,6 @@ export default function RightSidebar({
                         </div>
                       )}
 
-                      {/* Fallback for unknown types */}
                       {neighborDetails &&
                         !['form', 'line', 'section', 'index', 'regulation'].includes(neighborDetails.node_type) && (
                           <div className="text-xs text-gray-400">

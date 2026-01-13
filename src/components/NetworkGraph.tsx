@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import type { Relationship, GraphNode, GraphLink, NodeType } from '../types';
-import { fetchActorCounts, fetchNodeDetails } from '../api';
+import { fetchNodeDetails } from '../api';
 
 interface NetworkGraphProps {
   relationships?: Relationship[];
@@ -19,15 +19,15 @@ interface NetworkGraphProps {
 function baseColorForType(t?: NodeType): string {
   switch (t) {
     case 'form':
-      return '#88BACE'; // teal for forms
+      return '#88BACE';
     case 'line':
-      return '#9C3391'; // magenta for lines
+      return '#9C3391';
     case 'index':
-      return '#41378F'; // ink for index nodes
+      return '#41378F';
     case 'regulation':
-      return '#A67EB3'; // lilac for regulations
+      return '#A67EB3';
     default:
-      return '#AFBBE8'; // fallback steel color
+      return '#AFBBE8';
   }
 }
 
@@ -50,22 +50,9 @@ export default function NetworkGraph({
   const transformRef = useRef<d3.ZoomTransform | null>(null);
   const hasInitializedRef = useRef(false);
   const [onDemandCounts, setOnDemandCounts] = useState<Record<string, number>>({});
-  const [nodeDetailsCache, setNodeDetailsCache] = useState<Record<string, GraphNode>>({});
 
   const graphData = useMemo(() => {
-    // Bottom-up mode: use pre-built graph data
     if (externalGraphData) {
-      console.log('=== Using external graph data (bottom-up mode) ===');
-      console.log('Nodes:', externalGraphData.nodes.length);
-      console.log('Links:', externalGraphData.links.length);
-      
-      // ✅ NEW: Log edge type breakdown
-      const edgeTypeCounts = new Map<string, number>();
-      externalGraphData.links.forEach(link => {
-        edgeTypeCounts.set(link.edge_type, (edgeTypeCounts.get(link.edge_type) || 0) + 1);
-      });
-      console.log('📊 Edge types in external graph:', Object.fromEntries(edgeTypeCounts));
-      
       const filteredNodes = externalGraphData.nodes;
       const validNodeIds = new Set(filteredNodes.map(n => n.id));
       
@@ -75,20 +62,15 @@ export default function NetworkGraph({
         return validNodeIds.has(sourceId) && validNodeIds.has(targetId);
       });
       
-      console.log('Valid links after filtering:', validLinks.length);
-      
       return {
         nodes: filteredNodes,
         links: validLinks
       };
     }
 
-    // Top-down mode: build from relationships
     if (!relationships || relationships.length === 0) {
       return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
     }
-
-    console.log('🔍 Top-down mode - categoryFilter:', categoryFilter ? Array.from(categoryFilter) : 'none');
 
     const extractCategory = (id: string): 'individual' | 'corporation' | null => {
       const parts = id.split(':');
@@ -115,8 +97,6 @@ export default function NetworkGraph({
     const selectedCategory = categoryFilter && categoryFilter.size === 1 
       ? Array.from(categoryFilter)[0] 
       : null;
-
-    console.log('🎯 Selected category:', selectedCategory);
 
     const nodeMap = new Map<string, GraphNode>();
     const links: GraphLink[] = [];
@@ -145,7 +125,6 @@ export default function NetworkGraph({
 
       if (!nodeMap.has(sourceId)) {
         const baseColor = baseColorForType(sourceType);
-
         const originalNode = fullGraph?.nodes.find(n => n.id === sourceId);
 
         nodeMap.set(sourceId, {
@@ -166,7 +145,6 @@ export default function NetworkGraph({
 
       if (!nodeMap.has(targetId)) {
         const baseColor = baseColorForType(targetType);
-        
         const originalNode = fullGraph?.nodes.find(n => n.id === targetId);
 
         nodeMap.set(targetId, {
@@ -203,22 +181,6 @@ export default function NetworkGraph({
         edgeMap.get(edgeKey)!.count += 1;
       }
     });
-
-    const nodesByType = {
-      forms: 0,
-      lines: 0,
-      indexes: 0,
-      regulations: 0
-    };
-    nodeMap.forEach(node => {
-      if (node.node_type === 'form') nodesByType.forms++;
-      if (node.node_type === 'line') nodesByType.lines++;
-      if (node.node_type === 'index') nodesByType.indexes++;
-      if (node.node_type === 'regulation') nodesByType.regulations++;
-    });
-
-    console.log(`✅ After category filter (keeping index nodes) - nodes: ${nodeMap.size} links: ${edgeMap.size}`);
-    console.log(`   Forms: ${nodesByType.forms}, Lines: ${nodesByType.lines}, Indexes: ${nodesByType.indexes}, Regulations: ${nodesByType.regulations}`);
 
     links.push(...Array.from(edgeMap.values()));
 
@@ -277,14 +239,10 @@ export default function NetworkGraph({
       nodes,
       links,
     };
-  }, [relationships, externalGraphData, categoryFilter]);
+  }, [relationships, externalGraphData, categoryFilter, fullGraph]);
 
   useEffect(() => {
     if (!svgRef.current) return;
-
-    console.log('=== NetworkGraph rendering ===');
-    console.log('graphData.nodes:', graphData.nodes.length);
-    console.log('graphData.links:', graphData.links.length);
 
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
@@ -428,17 +386,6 @@ export default function NetworkGraph({
       .style('max-width', '300px');
 
     node.on('mouseover', (event, d) => {
-      // ✅ DEBUG: Log what data is in the node
-      if (d.node_type === 'line') {
-        console.log('Line node hover:', {
-          id: d.id,
-          name: d.name,
-          amount: d.amount,
-          num_forms: d.num_forms,
-          fullNode: d
-        });
-      }
-
       const categoryBadge = d.category === 'individual' ? '👤' : d.category === 'corporation' ? '🏢' : d.node_type === 'index' ? '📖' : '';
       const nodeTypeLabel = {
         'form': 'Form',
@@ -455,7 +402,6 @@ export default function NetworkGraph({
       tooltipHtml += `</span><br/>`;
       tooltipHtml += `${d.val} connections in view`;
 
-      // ✅ ALWAYS show amount and num_forms for line nodes
       if (d.node_type === 'line') {
         const amountDisplay = d.amount !== null && d.amount !== undefined
           ? `$${d.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -471,7 +417,7 @@ export default function NetworkGraph({
 
       tooltip.style('visibility', 'visible').html(tooltipHtml);
 
-      let totalCount = actorTotalCounts[d.name] || onDemandCounts[d.name];
+      const totalCount = actorTotalCounts[d.name] || onDemandCounts[d.name];
       if (totalCount !== undefined && totalCount !== d.val) {
         tooltip.html(tooltipHtml + `<br/><span style="color: #9ca3af;">(${totalCount} total)</span>`);
       }
@@ -485,7 +431,6 @@ export default function NetworkGraph({
       tooltip.style('visibility', 'hidden');
     });
 
-    // ✅ UPDATED: Link hover tooltips now include hierarchy and reference edge types
     link.on('mouseover', (event, d) => {
       const linkData = d as GraphLink & { count?: number };
       const count = linkData.count || 1;
@@ -500,7 +445,7 @@ export default function NetworkGraph({
       
       const edgeLabel = edgeTypeLabels[linkData.edge_type] || linkData.action;
       
-      let html = count > 1
+      const html = count > 1
         ? `<strong>${count} relationships</strong><br/>${edgeLabel}`
         : `<strong>${edgeLabel}</strong>`;
       
@@ -531,7 +476,7 @@ export default function NetworkGraph({
       simulation.stop();
       tooltip.remove();
     };
-  }, [graphData]);
+  }, [graphData, selectedActor, onActorClick, actorTotalCounts, onDemandCounts]);
 
   useEffect(() => {
     if (!nodeGroupRef.current || !linkGroupRef.current) return;
