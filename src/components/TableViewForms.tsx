@@ -83,32 +83,34 @@ function renderCell(node: GraphNode, key: SortKey, degreeMap: Map<string, number
   if (key === 'id') return (
     <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#60a5fa' }}>{String(val)}</span>
   );
-  if (key === 'display_label' || key === 'full_name') return (
+  if (key === 'display_label') return (
     <span style={{ color: '#93c5fd', fontWeight: 500 }}>{String(val)}</span>
   );
-  if (key === 'node_type') {
-    const colors: Record<string, string> = {
-      form: '#88BACE', line: '#A67EB3', index: '#7B6FC4', regulation: '#6BA3B5',
-    };
-    return (
-      <span style={{ color: colors[String(val)] ?? '#9ca3af', fontSize: '0.8rem', fontWeight: 600 }}>
-        {String(val)}
-      </span>
-    );
-  }
-  if (key === 'category') return (
-    <span style={{ color: val === 'individual' ? '#60a5fa' : val === 'corporation' ? '#c084fc' : '#6b7280', fontSize: '0.8rem' }}>
-      {String(val)}
-    </span>
-  );
+if (key === 'node_type') return (
+  <span style={{ color: '#e5e7eb', fontSize: '0.8rem', fontWeight: 600 }}>
+    {String(val)}
+  </span>
+);
+if (key === 'category') return (
+  <span style={{ color: '#e5e7eb', fontSize: '0.8rem' }}>
+    {String(val)}
+  </span>
+);
+
+if (key === 'full_name') return (
+  <span style={{ color: '#e5e7eb', fontSize: '0.8rem' }}>
+    {String(val)}
+  </span>
+);
   if (key === 'degree') return (
     <span style={{ color: Number(val) > 0 ? '#facc15' : '#4b5563', fontFamily: 'monospace' }}>{String(val)}</span>
   );
-  if (MONEY_KEYS.includes(key)) return (
-    <span style={{ color: '#34d399', fontFamily: 'monospace', fontSize: '0.8rem' }}>
-      {val === '—' ? '—' : formatMoney(Number(val))}
-    </span>
-  );
+if (MONEY_KEYS.includes(key)) return (
+  <span style={{ color: '#e5e7eb', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+    {val === '—' ? '—' : formatMoney(Number(val))}
+  </span>
+);
+
   if (['num_forms', 'total_num_forms', 'num_lines', 'ind_total_num_forms', 'ind_num_lines',
        'corp_total_num_forms', 'corp_num_lines'].includes(key)) return (
     <span style={{ color: '#d1d5db', fontFamily: 'monospace', fontSize: '0.8rem' }}>

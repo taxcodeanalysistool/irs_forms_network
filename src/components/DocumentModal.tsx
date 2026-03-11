@@ -12,34 +12,17 @@ interface Props {
   totalCount?: number;
 }
 
-const MONEY_KEYS = [
-  'amount', 'amount_per_form', 'total_amount',
-  'ind_total_amount', 'ind_amount_per_form',
-  'corp_total_amount', 'corp_amount_per_form',
-] as const;
-
-const COUNT_KEYS = [
-  'num_forms', 'total_num_forms', 'num_lines',
-  'ind_total_num_forms', 'ind_num_lines',
-  'corp_total_num_forms', 'corp_num_lines',
-] as const;
-
-const MONEY_LABELS: Record<string, string> = {
-  amount: 'Amount', amount_per_form: 'Amt/Form', total_amount: 'Total Amt',
-  ind_total_amount: 'Ind. Amt', ind_amount_per_form: 'Ind. Amt/Form',
-  corp_total_amount: 'Corp. Amt', corp_amount_per_form: 'Corp. Amt/Form',
-};
-const COUNT_LABELS: Record<string, string> = {
-  num_forms: '# Forms', total_num_forms: 'Total Forms', num_lines: '# Lines',
-  ind_total_num_forms: 'Ind. Forms', ind_num_lines: 'Ind. Lines',
-  corp_total_num_forms: 'Corp. Forms', corp_num_lines: 'Corp. Lines',
-};
-
 const TEXT_NODE_TYPES = ['index', 'section', 'regulation'];
 
-function formatMoney(val: number) {
-  return '$' + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+const METRIC_PAIRS = [
+  { moneyKey: 'total_amount',        countKey: 'total_num_forms',     moneyLabel: 'Total Amt',      countLabel: 'Total Forms' },
+  { moneyKey: 'amount_per_form',     countKey: 'num_lines',           moneyLabel: 'Amt/Form',       countLabel: '# Lines'     },
+  { moneyKey: 'amount',              countKey: 'num_forms',           moneyLabel: 'Amount',         countLabel: '# Forms'     },
+  { moneyKey: 'ind_total_amount',    countKey: 'ind_total_num_forms', moneyLabel: 'Ind. Amt',       countLabel: 'Ind. Forms'  },
+  { moneyKey: 'ind_amount_per_form', countKey: 'ind_num_lines',       moneyLabel: 'Ind. Amt/Form',  countLabel: 'Ind. Lines'  },
+  { moneyKey: 'corp_total_amount',   countKey: 'corp_total_num_forms',moneyLabel: 'Corp. Amt',      countLabel: 'Corp. Forms' },
+  { moneyKey: 'corp_amount_per_form',countKey: 'corp_num_lines',      moneyLabel: 'Corp. Amt/Form', countLabel: 'Corp. Lines' },
+] as const;
 
 const COMMON_WORDS = new Set([
   'the','and','or','to','from','in','on','at','by','for','with','about','as',
@@ -47,6 +30,10 @@ const COMMON_WORDS = new Set([
   'since','without','within','of','off','out','over','up','down','near','along',
   'among','across','behind','beyond','plus','except','but','per','via','upon','against',
 ]);
+
+function formatMoney(val: number) {
+  return '$' + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 function highlightText(text: string, term: string | null): JSX.Element[] {
   if (!term || !text) return [<span key="0">{text}</span>];
@@ -74,6 +61,10 @@ function highlightText(text: string, term: string | null): JSX.Element[] {
     return [<span key="0">{text}</span>];
   }
 }
+
+const nodeTypeColors: Record<string, string> = {
+  form: '#88BACE', line: '#A67EB3', index: '#7B6FC4', regulation: '#6BA3B5',
+};
 
 export default function DocumentModal({
   docId, highlightTerm, onClose, onNext, onPrev, currentIndex, totalCount
@@ -104,18 +95,9 @@ export default function DocumentModal({
   const isTextNode = TEXT_NODE_TYPES.includes(details?.node_type);
   const hasText = text && text.trim() !== '' && text !== 'No text available for this node.';
 
-const financialRows = details ? [
-  ...MONEY_KEYS.filter(k => details[k] !== undefined).map(k => ({
-    label: MONEY_LABELS[k], value: formatMoney(details[k] ?? 0), color: '#34d399',
-  })),
-  ...COUNT_KEYS.filter(k => details[k] !== undefined).map(k => ({
-    label: COUNT_LABELS[k], value: Number(details[k] ?? 0).toLocaleString(), color: '#d1d5db',
-  })),
-] : [];
-
-  const nodeTypeColors: Record<string, string> = {
-    form: '#88BACE', line: '#A67EB3', index: '#7B6FC4', regulation: '#6BA3B5',
-  };
+  const metricPairs = details
+    ? METRIC_PAIRS.filter(p => details[p.moneyKey] !== undefined || details[p.countKey] !== undefined)
+    : [];
 
   return (
     <div
@@ -153,7 +135,7 @@ const financialRows = details ? [
               )}
             </div>
 
-            {/* Stacked monospace hierarchy — matches OBBBA exactly */}
+            {/* Stacked monospace hierarchy */}
             {details && (details.title || details.section || details.full_name) && (
               <div className="space-y-1 text-sm text-gray-300 font-mono">
                 {details.title && (
@@ -184,7 +166,7 @@ const financialRows = details ? [
             )}
           </div>
 
-          {/* Right: financial data grid + close */}
+          {/* Right: close + financial grid */}
           <div className="flex flex-col items-end gap-3 flex-shrink-0">
             <button
               onClick={onClose}
@@ -193,13 +175,21 @@ const financialRows = details ? [
               ✕
             </button>
 
-            {financialRows.length > 0 && (
+            {metricPairs.length > 0 && (
               <div className="grid grid-cols-2 gap-1.5" style={{ minWidth: '220px' }}>
-                {financialRows.map(row => (
-                  <div key={row.label} className="bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5">
-                    <div className="text-xs text-gray-500 leading-tight">{row.label}</div>
-                    <div className="font-mono font-semibold text-xs leading-tight mt-0.5" style={{ color: row.color }}>
-                      {row.value}
+                {metricPairs.map(pair => (
+                  <div key={pair.moneyKey} className="bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5">
+                    <div className="text-xs text-gray-500 leading-tight">{pair.moneyLabel}</div>
+                    <div className="font-mono font-semibold text-xs leading-tight text-white">
+                      {details[pair.moneyKey] !== undefined
+                        ? formatMoney(details[pair.moneyKey] ?? 0)
+                        : '—'}
+                    </div>
+                    <div className="text-xs text-gray-500 leading-tight mt-1">{pair.countLabel}</div>
+                    <div className="font-mono font-semibold text-xs leading-tight text-white">
+                      {details[pair.countKey] !== undefined
+                        ? Number(details[pair.countKey] ?? 0).toLocaleString()
+                        : '—'}
                     </div>
                   </div>
                 ))}
@@ -224,20 +214,21 @@ const financialRows = details ? [
           ) : !hasText && !details?.definition ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-400 text-center">
-                <p className="text-lg">Full text for this node is not available.</p>
+                <p className="text-lg">
+                  {!isTextNode
+                    ? 'No text available for this node.'
+                    : 'Full text for this node is not available.'}
+                </p>
               </div>
             </div>
           ) : (
             <div className="prose prose-invert max-w-none">
-              {/* Definition for text nodes shown in body */}
               {details?.definition && isTextNode && (
                 <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700/30 rounded text-sm text-gray-300">
                   <div className="text-blue-400 font-semibold text-xs uppercase tracking-wide mb-1">Definition</div>
                   {highlightText(details.definition, highlightTerm ?? null)}
                 </div>
               )}
-
-              {/* Full text — OBBBA-identical rendering */}
               {hasText && (
                 <div className="whitespace-pre-wrap text-gray-300 leading-relaxed font-mono text-sm">
                   {highlightText(text, highlightTerm ?? null)}
@@ -247,20 +238,16 @@ const financialRows = details ? [
           )}
         </div>
 
-        {/* ── Footer — exact OBBBA layout ── */}
+        {/* ── Footer ── */}
         <div className="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
-          {/* Left: highlight legend */}
           <div className="text-sm text-gray-500 flex gap-4">
             {highlightTerm && (
-              <span>
-                <span className="inline-block bg-yellow-400 text-black px-2 py-0.5 rounded text-xs">
-                  {highlightTerm}
-                </span>
+              <span className="inline-block bg-yellow-400 text-black px-2 py-0.5 rounded text-xs">
+                {highlightTerm}
               </span>
             )}
           </div>
 
-          {/* Right: Prev / count / Next / Close */}
           <div className="flex items-center gap-2">
             {(onPrev || onNext) && (
               <div className="flex items-center gap-2 mr-4">

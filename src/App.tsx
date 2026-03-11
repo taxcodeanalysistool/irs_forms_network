@@ -539,7 +539,6 @@ const navNodeIds = useMemo(() => {
 
     setLoading(true);
     setRelationships([]);
-    setTopDownGraphInfo(null);
 
     try {
       const terms = params.keywords.split(',').map(t => t.trim()).filter(t => t);
@@ -700,6 +699,7 @@ const navNodeIds = useMemo(() => {
         onKeywordsChange={setKeywords}
         onBottomUpSearch={handleBottomUpSearch}
         buildMode={buildMode}
+        displayGraphInfo={graphDisplayInfo}
         topDownGraphInfo={graphDisplayInfo}
         totalGraphInfo={totalGraphInfo}
       />
