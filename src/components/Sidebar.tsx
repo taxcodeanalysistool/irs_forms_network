@@ -53,6 +53,10 @@ interface SidebarProps {
     nodeCount: number;
     linkCount: number;
   } | null;
+  totalGraphInfo?: {
+    nodeCount: number;
+    linkCount: number;
+  } | null;
 }
 
 function SelectedNodeBox({ 
@@ -137,7 +141,8 @@ export default function Sidebar({
   onBottomUpSearch,
   buildMode,
   displayGraphInfo,
-  topDownGraphInfo
+  topDownGraphInfo,
+  totalGraphInfo,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Actor[]>([]);
@@ -161,7 +166,6 @@ export default function Sidebar({
         setSearchResults([]);
         return;
       }
-
       setIsSearching(true);
       try {
         const results = await searchActors(searchQuery);
@@ -178,21 +182,12 @@ export default function Sidebar({
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-  useEffect(() => {
-    setLocalLimit(limit);
-  }, [limit]);
-
-  useEffect(() => {
-    setLocalKeywords(keywords);
-  }, [keywords]);
+  useEffect(() => { setLocalLimit(limit); }, [limit]);
+  useEffect(() => { setLocalKeywords(keywords); }, [keywords]);
 
   const handleLimitChange = (newLimit: number) => {
     setLocalLimit(newLimit);
-
-    if (limitDebounceTimerRef.current) {
-      clearTimeout(limitDebounceTimerRef.current);
-    }
-
+    if (limitDebounceTimerRef.current) clearTimeout(limitDebounceTimerRef.current);
     limitDebounceTimerRef.current = setTimeout(() => {
       onLimitChange(newLimit);
     }, 2000);
@@ -200,15 +195,12 @@ export default function Sidebar({
 
   useEffect(() => {
     return () => {
-      if (limitDebounceTimerRef.current) {
-        clearTimeout(limitDebounceTimerRef.current);
-      }
+      if (limitDebounceTimerRef.current) clearTimeout(limitDebounceTimerRef.current);
     };
   }, []);
 
   const handleKeywordSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    
     if (onBottomUpSearch) {
       onBottomUpSearch({
         keywords: localKeywords,
@@ -224,6 +216,15 @@ export default function Sidebar({
     }
   };
 
+  // Which counts to show in the "Displaying" block
+  const displayingNodeCount = buildMode === 'topDown'
+    ? topDownGraphInfo?.nodeCount
+    : displayGraphInfo?.nodeCount;
+  const displayingLinkCount = buildMode === 'topDown'
+    ? topDownGraphInfo?.linkCount
+    : displayGraphInfo?.linkCount;
+  const showDisplaying = displayingNodeCount !== undefined && displayingNodeCount > 0;
+
   return (
     <div className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col h-screen overflow-hidden">
       <div className="px-6 py-3 border-b border-gray-700 flex-shrink-0">
@@ -231,7 +232,7 @@ export default function Sidebar({
           IRS Forms Network
         </h1>
         <p className="mt-1 text-xs text-gray-400">
-          Tax forms, lines, USC sections, and Treasury regulations
+          Tax forms, lines, Title 26 sections, and Treasury regulations
         </p>
       </div>
 
@@ -247,13 +248,10 @@ export default function Sidebar({
             placeholder="Form 1040, Schedule C, Section 162..."
             className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-100 placeholder-gray-400 focus:outline-none focus:border-blue-500"
           />
-
           {searchQuery.trim().length >= 2 && (
             <div className="absolute z-10 left-4 right-4 mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
               {isSearching ? (
-                <div className="px-3 py-2 text-sm text-gray-400">
-                  Searching...
-                </div>
+                <div className="px-3 py-2 text-sm text-gray-400">Searching...</div>
               ) : searchResults.length > 0 ? (
                 searchResults.map((actor) => (
                   <button
@@ -266,15 +264,11 @@ export default function Sidebar({
                     className="w-full px-3 py-2 text-left text-sm hover:bg-gray-600 transition-colors border-b border-gray-600 last:border-b-0"
                   >
                     <div className="font-medium text-white">{actor.name}</div>
-                    <div className="text-xs text-gray-400">
-                      {actor.connection_count} relationships
-                    </div>
+                    <div className="text-xs text-gray-400">{actor.connection_count} relationships</div>
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-2 text-sm text-gray-400">
-                  No nodes found
-                </div>
+                <div className="px-3 py-2 text-sm text-gray-400">No nodes found</div>
               )}
             </div>
           )}
@@ -284,23 +278,20 @@ export default function Sidebar({
       {stats && (
         <div className="p-4 border-b border-gray-700 flex-shrink-0">
           <div className="space-y-2 text-sm">
-            {((buildMode === 'topDown' && topDownGraphInfo && topDownGraphInfo.nodeCount > 0) ||
-              (buildMode === 'bottomUp' && displayGraphInfo && displayGraphInfo.nodeCount > 0)) && (
+
+            {/* Displaying block — live graph counts, limited by sliders */}
+            {showDisplaying && (
               <div className="mb-3 p-2 bg-gray-900/50 rounded text-xs space-y-1 border border-gray-700">
                 <div className="flex justify-between">
-                  <span className="text-gray-100">Displaying nodes:</span>
+                  <span className="text-gray-100">Nodes displaying:</span>
                   <span className="font-mono text-green-400">
-                    {buildMode === 'topDown' 
-                      ? topDownGraphInfo?.nodeCount.toLocaleString()
-                      : displayGraphInfo?.nodeCount.toLocaleString()}
+                    {displayingNodeCount?.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-100">Displaying relationships:</span>
+                  <span className="text-gray-100">Relationships displaying:</span>
                   <span className="font-mono text-green-400">
-                    {buildMode === 'topDown'
-                      ? topDownGraphInfo?.linkCount.toLocaleString()
-                      : displayGraphInfo?.linkCount.toLocaleString()}
+                    {displayingLinkCount?.toLocaleString()}
                   </span>
                 </div>
                 {buildMode === 'bottomUp' && displayGraphInfo?.truncated && (
@@ -310,27 +301,29 @@ export default function Sidebar({
                 )}
               </div>
             )}
-            
+
+            {/* Total block — updates only when individual/corporation toggles */}
             <div className="flex justify-between">
               <span className="text-gray-400">Total nodes:</span>
               <span className="font-mono text-blue-400">
-                {stats.totalDocuments.count.toLocaleString()}
+                {(totalGraphInfo?.nodeCount ?? stats.totalDocuments.count).toLocaleString()}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Total relationships:</span>
               <span className="font-mono text-cyan-400">
-                {stats.totalTriples.count.toLocaleString()}
+                {(totalGraphInfo?.linkCount ?? stats.totalTriples.count).toLocaleString()}
               </span>
             </div>
+
           </div>
         </div>
       )}
 
       {selectedActor && (
-        <SelectedNodeBox 
-          selectedActor={selectedActor} 
-          onActorSelect={onActorSelect} 
+        <SelectedNodeBox
+          selectedActor={selectedActor}
+          onActorSelect={onActorSelect}
         />
       )}
 
@@ -350,18 +343,13 @@ export default function Sidebar({
                   Maximum relationships: {localLimit.toLocaleString()}
                 </label>
                 <input
-                  type="range"
-                  min="100"
-                  max="8000"
-                  step="100"
+                  type="range" min="100" max="8000" step="100"
                   value={localLimit}
                   onChange={(e) => handleLimitChange(parseInt(e.target.value))}
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>100</span>
-                  <span>4000</span>
-                  <span>8000</span>
+                  <span>100</span><span>4000</span><span>8000</span>
                 </div>
               </div>
 
@@ -370,18 +358,13 @@ export default function Sidebar({
                   Maximum nodes: {maxHops === null ? '2000' : maxHops}
                 </label>
                 <input
-                  type="range"
-                  min="100"
-                  max="4000"
-                  step="100"
+                  type="range" min="100" max="4000" step="100"
                   value={maxHops === null ? 2000 : maxHops}
                   onChange={(e) => onMaxHopsChange(parseInt(e.target.value))}
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>100</span>
-                  <span>2000</span>
-                  <span>4000</span>
+                  <span>100</span><span>2000</span><span>4000</span>
                 </div>
               </div>
 
@@ -436,22 +419,16 @@ export default function Sidebar({
                   Degrees of connection: {expansionDegree}
                 </label>
                 <input
-                  type="range"
-                  min="0"
-                  max="3"
-                  step="1"
+                  type="range" min="0" max="3" step="1"
                   value={expansionDegree}
                   onChange={(e) => setExpansionDegree(parseInt(e.target.value))}
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0</span>
-                  <span>1</span>
-                  <span>2</span>
-                  <span>3</span>
+                  <span>0</span><span>1</span><span>2</span><span>3</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  {expansionDegree === 0 
+                  {expansionDegree === 0
                     ? 'Show only nodes matching the search'
                     : `Include nodes up to ${expansionDegree} connection${expansionDegree > 1 ? 's' : ''} away`}
                 </p>
@@ -486,8 +463,8 @@ export default function Sidebar({
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  {searchLogic === 'OR' 
-                    ? 'Match nodes containing any keyword' 
+                  {searchLogic === 'OR'
+                    ? 'Match nodes containing any keyword'
                     : 'Match nodes containing all keywords'}
                 </p>
               </div>
@@ -529,16 +506,13 @@ export default function Sidebar({
               <span>Node filters</span>
               <span className="text-sm">{nodeTypesExpanded ? '▼' : '▶'}</span>
             </button>
-            
             {nodeTypesExpanded && (
               <>
                 <div className="flex gap-1.5 mb-3">
                   <button
                     onClick={() => {
                       ['form', 'line', 'index', 'regulation'].forEach(type => {
-                        if (!enabledNodeTypes.has(type)) {
-                          onToggleNodeType(type);
-                        }
+                        if (!enabledNodeTypes.has(type)) onToggleNodeType(type);
                       });
                     }}
                     className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
@@ -549,9 +523,7 @@ export default function Sidebar({
                   <button
                     onClick={() => {
                       ['form', 'line', 'index', 'regulation'].forEach(type => {
-                        if (enabledNodeTypes.has(type)) {
-                          onToggleNodeType(type);
-                        }
+                        if (enabledNodeTypes.has(type)) onToggleNodeType(type);
                       });
                     }}
                     className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
@@ -560,29 +532,25 @@ export default function Sidebar({
                     Deselect all
                   </button>
                 </div>
-                
                 <div className="space-y-2">
                   {[
-                    { type: 'index', label: 'USC Sections' },
+                    { type: 'index', label: 'Sections' },
                     { type: 'line', label: 'Lines' },
                     { type: 'form', label: 'Forms' },
-                    { type: 'regulation', label: 'Regulations' }
-                  ].map((item) => {
-                    const isEnabled = enabledNodeTypes.has(item.type);
-                    return (
-                      <button
-                        key={item.type}
-                        onClick={() => onToggleNodeType(item.type)}
-                        className={`w-full flex justify-between items-center rounded px-3 py-2 text-sm transition-colors ${
-                          isEnabled
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                        }`}
-                      >
-                        <span>{item.label}</span>
-                      </button>
-                    );
-                  })}
+                    { type: 'regulation', label: 'Regulations' },
+                  ].map((item) => (
+                    <button
+                      key={item.type}
+                      onClick={() => onToggleNodeType(item.type)}
+                      className={`w-full flex justify-between items-center rounded px-3 py-2 text-sm transition-colors ${
+                        enabledNodeTypes.has(item.type)
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
                 </div>
               </>
             )}
@@ -604,9 +572,7 @@ export default function Sidebar({
                   <button
                     onClick={() => {
                       stats.categories.forEach(cat => {
-                        if (!enabledCategories.has(cat.category)) {
-                          onToggleCategory(cat.category);
-                        }
+                        if (!enabledCategories.has(cat.category)) onToggleCategory(cat.category);
                       });
                     }}
                     className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
@@ -617,9 +583,7 @@ export default function Sidebar({
                   <button
                     onClick={() => {
                       stats.categories.forEach(cat => {
-                        if (enabledCategories.has(cat.category)) {
-                          onToggleCategory(cat.category);
-                        }
+                        if (enabledCategories.has(cat.category)) onToggleCategory(cat.category);
                       });
                     }}
                     className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
@@ -630,30 +594,25 @@ export default function Sidebar({
                 </div>
                 <div className="space-y-2">
                   {stats.categories.map((cat) => {
-                    const isEnabled = enabledCategories.has(cat.category);
                     const labels: Record<string, string> = {
                       'belongs_to': 'Form → Line',
                       'cites_section': 'Line → Section',
                       'cites_regulation': 'Line → Regulation',
                       'hierarchy': 'Title 26 Hierarchy',
-                      'reference': 'Title 26 References'
+                      'reference': 'Title 26 References',
                     };
                     return (
                       <button
                         key={cat.category}
                         onClick={() => onToggleCategory(cat.category)}
                         className={`w-full flex justify-between items-center rounded px-3 py-2 text-sm transition-colors ${
-                          isEnabled
+                          enabledCategories.has(cat.category)
                             ? 'bg-blue-600 text-white hover:bg-blue-700'
                             : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                         }`}
                       >
-                        <span>
-                          {labels[cat.category] || cat.category}
-                        </span>
-                        <span className="font-mono text-xs">
-                          {cat.count.toLocaleString()}
-                        </span>
+                        <span>{labels[cat.category] || cat.category}</span>
+                        <span className="font-mono text-xs">{cat.count.toLocaleString()}</span>
                       </button>
                     );
                   })}

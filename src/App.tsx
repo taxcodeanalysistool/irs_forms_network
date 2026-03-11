@@ -1,11 +1,14 @@
 // src/App.tsx
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import NetworkGraph from './components/NetworkGraph';
 import Sidebar from './components/Sidebar';
 import RightSidebar from './components/RightSidebar';
 import { WelcomeModal } from './components/WelcomeModal';
 import { NetworkBuilder } from './services/networkBuilder';
+import TableViewForms from './components/TableViewForms';
+import DocumentModal from './components/DocumentModal';
+
 import { 
   fetchActorCounts 
 } from './api';
@@ -34,12 +37,18 @@ function App() {
     matchedCount: 0
   });
 
+  const [openDocId, setOpenDocId] = useState<string | null>(null);
+  const [openDocIndex, setOpenDocIndex] = useState<number>(0);
+
+
   const [displayGraphInfo, setDisplayGraphInfo] = useState<{
     nodeCount: number;
     linkCount: number;
     truncated: boolean;
     matchedCount: number;
   } | null>(null);
+
+  const [viewMode, setViewMode] = useState<'graph' | 'table'>('graph');
 
   const lastSearchParamsRef = useRef<{
     keywords: string;
@@ -80,10 +89,6 @@ function App() {
     return !localStorage.getItem('hasSeenWelcome');
   });
   const [isInitialized, setIsInitialized] = useState(false);
-  const [topDownGraphInfo, setTopDownGraphInfo] = useState<{
-    nodeCount: number;
-    linkCount: number;
-  } | null>(null);
 
   const currentCategory = categoryFilter.size === 1 
     ? Array.from(categoryFilter)[0] 
@@ -290,24 +295,141 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (relationships.length > 0) {
-      const nodeSet = new Set<string>();
-      relationships.forEach(rel => {
+// What's actually displayed in the graph after ALL filters including categoryFilter
+const graphDisplayInfo = useMemo(() => {
+  if (buildMode === 'bottomUp') return displayGraphInfo;
+
+  const selectedCategory = categoryFilter.size === 1 ? Array.from(categoryFilter)[0] : null;
+
+  const filtered = selectedCategory
+    ? relationships.filter(rel => {
+        const sourceIsIndex = rel.actor_type === 'index';
+        const targetIsIndex = rel.target_type === 'index';
         const sourceId = rel.actor_id ?? rel.actor;
         const targetId = rel.target_id ?? rel.target;
-        nodeSet.add(sourceId);
-        nodeSet.add(targetId);
-      });
+        const sourceCat = sourceId.split(':')[1];
+        const targetCat = targetId.split(':')[1];
+        if (!sourceIsIndex && sourceCat !== selectedCategory) return false;
+        if (!targetIsIndex && targetCat !== selectedCategory) return false;
+        return true;
+      })
+    : relationships;
 
-      setTopDownGraphInfo({
-        nodeCount: nodeSet.size,
-        linkCount: relationships.length
-      });
-    } else {
-      setTopDownGraphInfo(null);
+  const nodeIds = new Set<string>();
+  filtered.forEach(rel => {
+    nodeIds.add(rel.actor_id ?? rel.actor);
+    nodeIds.add(rel.target_id ?? rel.target);
+  });
+
+  return { nodeCount: nodeIds.size, linkCount: filtered.length, truncated: false, matchedCount: nodeIds.size };
+}, [buildMode, displayGraphInfo, relationships, categoryFilter]);
+
+
+// Total counts from fullGraph — respects category + node/edge type filters but no limit/maxHops
+const totalGraphInfo = useMemo(() => {
+  const selectedCategory = categoryFilter.size === 1 ? Array.from(categoryFilter)[0] : null;
+  const nodeMap = new Map(fullGraph.nodes.map(n => [n.id, n]));
+
+  let filteredLinks = fullGraph.links;
+
+  if (selectedCategory) {
+    filteredLinks = filteredLinks.filter(l => {
+      const sourceId = typeof l.source === 'string' ? l.source : (l.source as any).id;
+      const targetId = typeof l.target === 'string' ? l.target : (l.target as any).id;
+      const sourceNode = nodeMap.get(sourceId);
+      const targetNode = nodeMap.get(targetId);
+      const sourceIsIndex = sourceNode?.node_type === 'index';
+      const targetIsIndex = targetNode?.node_type === 'index';
+      if (!sourceIsIndex && sourceNode?.category !== selectedCategory) return false;
+      if (!targetIsIndex && targetNode?.category !== selectedCategory) return false;
+      return true;
+    });
+  }
+
+  const nodeIds = new Set<string>();
+  filteredLinks.forEach(l => {
+    nodeIds.add(typeof l.source === 'string' ? l.source : (l.source as any).id);
+    nodeIds.add(typeof l.target === 'string' ? l.target : (l.target as any).id);
+  });
+
+  return { nodeCount: nodeIds.size, linkCount: filteredLinks.length };
+}, [fullGraph, categoryFilter]);
+
+
+
+const tableGraph = useMemo(() => {
+  const categories = Array.from(enabledCategories);
+  const nodeTypes = Array.from(enabledNodeTypes);
+  const selectedCategory = categoryFilter.size === 1 ? Array.from(categoryFilter)[0] : null;
+  const nodeMap = new Map(fullGraph.nodes.map(n => [n.id, n]));
+
+  // Determine source links
+  let filteredLinks = buildMode === 'bottomUp' && displayGraph.nodes.length > 0
+    ? displayGraph.links
+    : fullGraph.links;
+
+  // Edge type filter
+  if (categories.length > 0) {
+    filteredLinks = filteredLinks.filter(l => categories.includes(l.edge_type));
+  }
+
+  // Node type + category filter on links
+  filteredLinks = filteredLinks.filter(l => {
+    const sourceId = typeof l.source === 'string' ? l.source : (l.source as any).id;
+    const targetId = typeof l.target === 'string' ? l.target : (l.target as any).id;
+    const sourceNode = nodeMap.get(sourceId);
+    const targetNode = nodeMap.get(targetId);
+
+    if (nodeTypes.length > 0 && nodeTypes.length < 4) {
+      if (!nodeTypes.includes(sourceNode?.node_type || '') ||
+          !nodeTypes.includes(targetNode?.node_type || '')) return false;
     }
-  }, [relationships]);
+    if (selectedCategory) {
+      const sourceIsIndex = sourceNode?.node_type === 'index';
+      const targetIsIndex = targetNode?.node_type === 'index';
+      if (!sourceIsIndex && sourceNode?.category !== selectedCategory) return false;
+      if (!targetIsIndex && targetNode?.category !== selectedCategory) return false;
+    }
+    return true;
+  });
+
+  // For table: include ALL nodes passing filters, even those with no links
+  const sourceNodes = buildMode === 'bottomUp' && displayGraph.nodes.length > 0
+    ? displayGraph.nodes
+    : fullGraph.nodes;
+
+  const filteredNodes = sourceNodes.filter(n => {
+    if (nodeTypes.length > 0 && nodeTypes.length < 4) {
+      if (!nodeTypes.includes(n.node_type || '')) return false;
+    }
+    if (selectedCategory) {
+      const isIndex = n.node_type === 'index';
+      if (!isIndex && n.category !== selectedCategory) return false;
+    }
+    return true;
+  });
+
+  return { nodes: filteredNodes, links: filteredLinks };
+}, [buildMode, displayGraph, fullGraph, enabledCategories, enabledNodeTypes, categoryFilter]);
+
+
+const navNodeIds = useMemo(() => {
+  if (!selectedActor) return [];
+  const selectedNode = fullGraph.nodes.find(n => n.name === selectedActor);
+  if (!selectedNode) return [];
+  return actorRelationships
+    .map(rel => {
+      const actorId = rel.actor_id ?? rel.actor;
+      const targetId = rel.target_id ?? rel.target;
+      return actorId === selectedNode.id ? targetId : actorId;
+    })
+    .filter(id => {
+      const node = fullGraph.nodes.find(n => n.id === id);
+      return node?.node_type === 'index' || node?.node_type === 'section';
+    }) as string[];
+}, [actorRelationships, selectedActor, fullGraph.nodes]);
+
+
 
   const handleActorClick = useCallback((actorName: string | null) => {
     setSelectedActor(prev => {
@@ -578,11 +700,36 @@ function App() {
         onKeywordsChange={setKeywords}
         onBottomUpSearch={handleBottomUpSearch}
         buildMode={buildMode}
-        displayGraphInfo={displayGraphInfo}
-        topDownGraphInfo={topDownGraphInfo}
+        topDownGraphInfo={graphDisplayInfo}
+        totalGraphInfo={totalGraphInfo}
       />
 
-      <div className="flex-1 relative">
+      <div className="flex-1 relative pb-16 lg:pb-0 overflow-hidden min-w-0">
+
+        {/* Graph / Table Toggle — bottom left */}
+        <div className="absolute bottom-12 left-4 z-20 flex rounded-lg overflow-hidden border border-gray-600">
+          <button
+            className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+              viewMode === 'graph'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+            onClick={() => setViewMode('graph')}
+          >
+            Graph
+          </button>
+          <button
+            className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+              viewMode === 'table'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+            onClick={() => setViewMode('table')}
+          >
+            Table
+          </button>
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center h-full bg-gray-900">
             <div className="text-center">
@@ -590,7 +737,7 @@ function App() {
               <p className="text-gray-300">Loading network...</p>
             </div>
           </div>
-        ) : (
+        ) : viewMode === 'graph' ? (
           <NetworkGraph
             graphData={buildMode === 'bottomUp' && displayGraph.nodes.length > 0 ? displayGraph : undefined}
             relationships={buildMode === 'topDown' && relationships.length > 0 ? relationships : undefined}
@@ -601,8 +748,19 @@ function App() {
             actorTotalCounts={actorTotalCounts}
             categoryFilter={categoryFilter}
           />
+        ) : (
+          <TableViewForms
+            nodes={tableGraph.nodes}
+            links={tableGraph.links}
+            onNodeClick={(id) => {
+              if (!id) return;
+              const node = fullGraph.nodes.find(n => n.id === id);
+              if (node) handleActorClick(node.name);
+            }}
+          />
         )}
       </div>
+
 
       {selectedActor && (
         <RightSidebar
@@ -614,8 +772,35 @@ function App() {
           keywords={keywords}
           categoryFilter={currentCategory}
           onActorClick={handleActorClick}
+          onViewFullText={(nodeId) => {
+  const idx = navNodeIds.indexOf(nodeId);
+  setOpenDocId(nodeId);
+  setOpenDocIndex(idx >= 0 ? idx : 0);
+}}
         />
       )}
+
+{openDocId && (
+  <DocumentModal
+    docId={openDocId}
+    highlightTerm={selectedActor}
+    onClose={() => setOpenDocId(null)}
+    currentIndex={openDocIndex}
+    totalCount={navNodeIds.length}
+    onPrev={openDocIndex > 0 ? () => {
+      const newIdx = openDocIndex - 1;
+      setOpenDocId(navNodeIds[newIdx]);
+      setOpenDocIndex(newIdx);
+    } : undefined}
+    onNext={openDocIndex < navNodeIds.length - 1 ? () => {
+      const newIdx = openDocIndex + 1;
+      setOpenDocId(navNodeIds[newIdx]);
+      setOpenDocIndex(newIdx);
+    } : undefined}
+  />
+)}
+
+
 
       <WelcomeModal isOpen={showWelcome} onClose={handleCloseWelcome} />
     </div>
